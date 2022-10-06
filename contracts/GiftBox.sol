@@ -2,7 +2,7 @@
 pragma solidity ^0.8.9;
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract GiftBox {
     using Counters for Counters.Counter;
@@ -30,13 +30,13 @@ contract GiftBox {
         string[] references;
     }
 
-    Fund[] public funds;
+    mapping(uint256 => Fund) public funds;
 
     constructor(address _usdcAddress) {
         usdcAddress = _usdcAddress;
     }
 
-    event CreateFund(string name, string description, string[] references);
+    event CreateFund(uint256 fundId, string name, string description, string[] references);
 
     // Create a fund
     function createFund(
@@ -45,7 +45,9 @@ contract GiftBox {
         string[] memory references
     ) public {
         // Get the next empty fund
-        Fund storage fund = funds.push();
+        uint256 fundId = fundCount.current();
+        Fund storage fund = funds[fundId];
+        fundCount.increment();
 
         // Set the values of the fund
         fund.manager = msg.sender;
@@ -55,6 +57,7 @@ contract GiftBox {
 
         // Emit event
         emit CreateFund({
+            fundId: fundId,
             name: name,
             description: description,
             references: references
@@ -72,8 +75,8 @@ contract GiftBox {
         funds[fundId].tokensInvested[msg.sender] += amount;
 
         // Transfer USDC
-        ERC20 usdc = ERC20(usdcAddress);
-        usdc.transfer(address(this), amount);
+        IERC20 usdc = IERC20(usdcAddress);
+        usdc.transferFrom(msg.sender, address(this), amount);
 
         // Emit event
         emit DepositTokens({fundId: fundId, amount: amount});
