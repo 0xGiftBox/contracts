@@ -9,3 +9,5 @@ typechain-types/dist
 cache
 artifacts
 
+soljson*
+.vscode

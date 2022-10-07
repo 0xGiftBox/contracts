@@ -22,41 +22,57 @@ describe("GiftBox", function () {
   const createFundFixture = async () => {
     const { giftBox, testToken, donor1, donor2 } =
       await deployContractFixture();
-    await giftBox.createFund("Fund 1", "Just a test fund", []);
+    const tx = await giftBox.createFund(
+      "Fund 1",
+      "Just a test fund",
+      "SUMIT",
+      []
+    );
+    const txReceipt = await tx.wait();
+    const fundToken = txReceipt.events?.at(1)?.args?.fundToken;
 
     // Mint 10k tokens to each donor
     await testToken.mint(donor1.address, 10000);
     await testToken.mint(donor2.address, 10000);
 
-    return { giftBox, fundId: 0, donor1, donor2, testToken };
+    return { giftBox, fundToken: fundToken, donor1, donor2, testToken };
   };
 
   describe("Create Fund", () => {
     it("can create fund", async function () {
       const { giftBox } = await loadFixture(deployContractFixture);
 
-      const tx = await giftBox.createFund("Fund 1", "Just a test fund", []);
+      const tx = await giftBox.createFund(
+        "Fund 1",
+        "Just a test fund",
+        "SUMIT",
+        []
+      );
+      const txReceipt = await tx.wait();
+      const fundToken = txReceipt.events?.at(1)?.args?.fundToken;
 
       await expect(tx).not.to.be.reverted;
       await expect(tx)
         .to.emit(giftBox, "CreateFund")
-        .withArgs(0, "Fund 1", "Just a test fund", []);
+        .withArgs(fundToken, "Fund 1", "Just a test fund", "SUMIT", []);
     });
   });
 
   describe("Deposit Tokens", () => {
     it("can deposit tokens to a fund", async function () {
-      const { giftBox, fundId, donor1, testToken } = await loadFixture(
+      const { giftBox, fundToken, donor1, testToken } = await loadFixture(
         createFundFixture
       );
 
       // Donor approves GiftBox to spend 100 tokens
       await testToken.connect(donor1).approve(giftBox.address, 100);
       // Donor deposits 100 tokens to GiftBox
-      const tx = await giftBox.connect(donor1).depositTokens(fundId, 100);
+      const tx = await giftBox.connect(donor1).depositTokens(fundToken, 100);
 
       await expect(tx).not.to.be.reverted;
-      await expect(tx).to.emit(giftBox, "DepositTokens").withArgs(fundId, 100);
+      await expect(tx)
+        .to.emit(giftBox, "DepositTokens")
+        .withArgs(fundToken, 100);
     });
   });
 });
