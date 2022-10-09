@@ -3,24 +3,21 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 
 describe("GiftBox", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
   const deployContractFixture = async () => {
     const [owner, fundManager, donor1, donor2] = await ethers.getSigners();
-    // Deploy a generic ERC20 token to be used as USDC for testing
-    const TestToken = await ethers.getContractFactory("TestToken");
-    const testToken = await TestToken.deploy();
+    // Deploy a generic ERC20 token to be used as stablecoin for testing
+    const TestStableCoin = await ethers.getContractFactory("TestStableCoin");
+    const testStableCoin = await TestStableCoin.deploy();
 
     const GiftBox = await ethers.getContractFactory("GiftBox");
-    // Pass the address of USDC contract while deploying GiftBox
-    const giftBox = await GiftBox.deploy(testToken.address);
+    // Pass the address of stablecoin contract while deploying GiftBox
+    const giftBox = await GiftBox.deploy(testStableCoin.address);
 
-    return { giftBox, testToken, fundManager, donor1, donor2 };
+    return { giftBox, testStableCoin, fundManager, donor1, donor2 };
   };
 
   const createFundFixture = async () => {
-    const { giftBox, testToken, donor1, donor2 } =
+    const { giftBox, testStableCoin, donor1, donor2 } =
       await deployContractFixture();
     const tx = await giftBox.createFund(
       "Fund 1",
@@ -29,13 +26,20 @@ describe("GiftBox", function () {
       []
     );
     const txReceipt = await tx.wait();
-    const fundToken = txReceipt.events?.at(1)?.args?.fundToken;
+    const fundTokenAddress: string =
+      txReceipt.events?.at(1)?.args?.fundTokenAddress;
 
-    // Mint 10k tokens to each donor
-    await testToken.mint(donor1.address, 10000);
-    await testToken.mint(donor2.address, 10000);
+    // Mint 10k stable coins to each donor
+    await testStableCoin.mint(donor1.address, 10000);
+    await testStableCoin.mint(donor2.address, 10000);
 
-    return { giftBox, fundToken: fundToken, donor1, donor2, testToken };
+    return {
+      giftBox,
+      fundTokenAddress,
+      donor1,
+      donor2,
+      testStableCoin,
+    };
   };
 
   describe("Create Fund", () => {
@@ -49,30 +53,41 @@ describe("GiftBox", function () {
         []
       );
       const txReceipt = await tx.wait();
-      const fundToken = txReceipt.events?.at(1)?.args?.fundToken;
+      const fundTokenAddress: string =
+        txReceipt.events?.at(1)?.args?.fundTokenAddress;
 
       await expect(tx).not.to.be.reverted;
       await expect(tx)
         .to.emit(giftBox, "CreateFund")
-        .withArgs(fundToken, "Fund 1", "Just a test fund", "SUMIT", []);
+        .withArgs(fundTokenAddress, "Fund 1", "Just a test fund", "SUMIT", []);
     });
   });
 
-  describe("Deposit Tokens", () => {
-    it("can deposit tokens to a fund", async function () {
-      const { giftBox, fundToken, donor1, testToken } = await loadFixture(
-        createFundFixture
-      );
+  describe("Deposit Stablecoins", () => {
+    it("can deposit stablecoins to a fund", async function () {
+      const { giftBox, fundTokenAddress, donor1, testStableCoin } =
+        await loadFixture(createFundFixture);
 
-      // Donor approves GiftBox to spend 100 tokens
-      await testToken.connect(donor1).approve(giftBox.address, 100);
-      // Donor deposits 100 tokens to GiftBox
-      const tx = await giftBox.connect(donor1).depositTokens(fundToken, 100);
+      // Donor approves GiftBox to spend 100 stablecoins
+      await testStableCoin.connect(donor1).approve(giftBox.address, 100);
+      // Donor deposits 100 stablecoins to GiftBox
+      const tx = await giftBox
+        .connect(donor1)
+        .depositStableCoins(fundTokenAddress, 100);
 
       await expect(tx).not.to.be.reverted;
       await expect(tx)
-        .to.emit(giftBox, "DepositTokens")
-        .withArgs(fundToken, 100);
+        .to.emit(giftBox, "DepositStableCoins")
+        .withArgs(fundTokenAddress, 100);
+
+      const GiftBoxFundToken = await ethers.getContractFactory(
+        "GiftBoxFundToken"
+      );
+      const fundToken = GiftBoxFundToken.attach(fundTokenAddress);
+
+      // Ensure GiftBox received stablecoin and donor got fund tokens
+      expect(await testStableCoin.balanceOf(giftBox.address)).to.equal(100);
+      expect(await fundToken.balanceOf(donor1.address)).to.equal(100);
     });
   });
 });

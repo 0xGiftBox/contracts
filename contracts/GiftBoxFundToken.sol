@@ -5,11 +5,11 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract GiftBoxToken is ERC20, ERC20Burnable, Ownable {
-    constructor(string memory fundName, string memory symbolSuffix)
+contract GiftBoxFundToken is ERC20, ERC20Burnable, Ownable {
+    constructor(string memory name, string memory symbolSuffix)
         ERC20(
-            string.concat("GiftBox Token: ", fundName),
-            string.concat("gbt", symbolSuffix)
+            string.concat("GiftBox Fund Token: ", name),
+            string.concat("gft", symbolSuffix)
         )
     {}
 

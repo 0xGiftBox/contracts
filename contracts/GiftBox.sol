@@ -3,10 +3,10 @@ pragma solidity ^0.8.17;
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./GiftBoxToken.sol";
+import "./GiftBoxFundToken.sol";
 
 contract GiftBox {
-    address public usdcAddress;
+    address public stableCoinAddress;
 
     struct Fund {
         address manager;
@@ -24,15 +24,15 @@ contract GiftBox {
         string[] references;
     }
 
-    address[] fundTokens;
+    address[] fundTokenAddresses;
     mapping(address => Fund) public funds;
 
-    constructor(address _usdcAddress) {
-        usdcAddress = _usdcAddress;
+    constructor(address _stableCoinAddress) {
+        stableCoinAddress = _stableCoinAddress;
     }
 
     event CreateFund(
-        address fundToken,
+        address fundTokenAddress,
         string name,
         string description,
         string symbolSuffix,
@@ -47,11 +47,12 @@ contract GiftBox {
         string[] memory references
     ) public {
         // Deploy new ERC20 token for this fund
-        GiftBoxToken fundTokenContract = new GiftBoxToken(name, symbolSuffix);
-        address fundToken = address(fundTokenContract);
+        GiftBoxFundToken fundToken = new GiftBoxFundToken(name, symbolSuffix);
+        address fundTokenAddress = address(fundToken);
+        fundTokenAddresses.push(fundTokenAddress);
 
         // Set the values of the fund
-        Fund storage fund = funds[fundToken];
+        Fund storage fund = funds[fundTokenAddress];
         fund.manager = msg.sender;
         fund.name = name;
         fund.description = description;
@@ -59,7 +60,7 @@ contract GiftBox {
 
         // Emit event
         emit CreateFund({
-            fundToken: fundToken,
+            fundTokenAddress: fundTokenAddress,
             name: name,
             description: description,
             symbolSuffix: symbolSuffix,
@@ -67,18 +68,23 @@ contract GiftBox {
         });
     }
 
-    event DepositTokens(address fundToken, uint256 amount);
+    event DepositStableCoins(address fundTokenAddress, uint256 amount);
 
-    function depositTokens(address fundToken, uint256 amount) public {
-        // Transfer USDC
-        IERC20 usdcContract = IERC20(usdcAddress);
-        usdcContract.transferFrom(msg.sender, address(this), amount);
+    function depositStableCoins(address fundTokenAddress, uint256 amount)
+        public
+    {
+        // Transfer stablecoins
+        IERC20 stableCoin = IERC20(stableCoinAddress);
+        stableCoin.transferFrom(msg.sender, address(this), amount);
 
         // Mint equal amount of fund tokens
-        GiftBoxToken fundTokenContract = GiftBoxToken(fundToken);
-        fundTokenContract.mint(msg.sender, amount);
+        GiftBoxFundToken fundToken = GiftBoxFundToken(fundTokenAddress);
+        fundToken.mint(msg.sender, amount);
 
         // Emit event
-        emit DepositTokens({fundToken: fundToken, amount: amount});
+        emit DepositStableCoins({
+            fundTokenAddress: fundTokenAddress,
+            amount: amount
+        });
     }
 }
