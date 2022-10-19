@@ -9,22 +9,37 @@ contract GiftBox {
     // Address of the stablecoin GiftBox accepts as funding
     address public stableCoinAddress;
 
+    enum Vote {
+        NA,
+        For,
+        Against
+    }
+
     struct Fund {
         address manager;
         string name;
-        string description;
+        bool isOpen;
+    }
+
+    enum WithdrawRequestStatus {
+        Open,
+        Passed,
+        Failed
     }
 
     struct WithdrawRequest {
         uint256 amount;
         string title;
-        string description;
+        WithdrawRequestStatus status;
+        uint256 numVotesFor;
+        uint256 numVotesAgainst;
     }
 
     // Funds
     address[] fundTokenAddresses;
     mapping(address => Fund) public funds;
     mapping(address => string[]) public fundReferences;
+    mapping(address => mapping(address => Vote)) public fundClosureVotes;
 
     function numFunds() public view returns (uint256) {
         return fundTokenAddresses.length;
@@ -42,6 +57,8 @@ contract GiftBox {
     mapping(address => WithdrawRequest[]) public withdrawRequests;
     mapping(address => mapping(uint256 => string[]))
         public withdrawRequestReferences;
+    mapping(address => mapping(uint256 => mapping(address => Vote)))
+        public withdrawRequestVotes;
 
     function numWithdrawRequests(address fundTokenAddress)
         public
@@ -68,7 +85,6 @@ contract GiftBox {
         address fundTokenAddress,
         address manager,
         string name,
-        string description,
         string symbolSuffix,
         string[] references
     );
@@ -76,7 +92,6 @@ contract GiftBox {
     // Create a fund
     function createFund(
         string memory name,
-        string memory description,
         string memory symbolSuffix,
         string[] memory references
     ) public {
@@ -89,7 +104,7 @@ contract GiftBox {
         funds[fundTokenAddress] = Fund({
             manager: msg.sender,
             name: name,
-            description: description
+            isOpen: true
         });
         fundReferences[fundTokenAddress] = references;
 
@@ -98,7 +113,6 @@ contract GiftBox {
             fundTokenAddress: fundTokenAddress,
             manager: msg.sender,
             name: name,
-            description: description,
             symbolSuffix: symbolSuffix,
             references: references
         });
@@ -126,6 +140,43 @@ contract GiftBox {
             fundTokenAddress: fundTokenAddress,
             depositor: msg.sender,
             amount: amount
+        });
+    }
+
+    event CreateWithdrawRequest(
+        address fundTokenAddress,
+        uint256 id,
+        uint256 amount,
+        string title,
+        string[] references
+    );
+
+    function createWithdrawRequest(
+        address fundTokenAddress,
+        uint256 amount,
+        string memory title,
+        string[] memory references
+    ) public {
+        uint256 requestId = withdrawRequests[fundTokenAddress].length;
+
+        // Create a new WithdrawRequest object
+        withdrawRequests[fundTokenAddress].push(
+            WithdrawRequest({
+                title: title,
+                amount: amount,
+                numVotesFor: 0,
+                numVotesAgainst: 0,
+                status: WithdrawRequestStatus.Open
+            })
+        );
+        withdrawRequestReferences[fundTokenAddress][requestId] = references;
+
+        emit CreateWithdrawRequest({
+            amount: amount,
+            fundTokenAddress: fundTokenAddress,
+            title: title,
+            references: references,
+            id: requestId
         });
     }
 }
