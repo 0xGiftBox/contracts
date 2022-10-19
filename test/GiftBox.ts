@@ -44,22 +44,47 @@ describe("GiftBox", function () {
 
   describe("Create Fund", () => {
     it("can create fund", async function () {
-      const { giftBox } = await loadFixture(deployContractFixture);
+      const { giftBox, fundManager } = await loadFixture(deployContractFixture);
+      const fundName = "Fund 1";
+      const fundDescription = "Just a test fund";
+      const fundSymbolSuffix = "SUMIT";
+      const fundReference =
+        "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
 
-      const tx = await giftBox.createFund(
-        "Fund 1",
-        "Just a test fund",
-        "SUMIT",
-        []
-      );
+      // Send transaction
+      const tx = await giftBox
+        .connect(fundManager)
+        .createFund(fundName, fundDescription, fundSymbolSuffix, [
+          fundReference,
+        ]);
       const txReceipt = await tx.wait();
       const fundTokenAddress: string =
         txReceipt.events?.at(1)?.args?.fundTokenAddress;
 
+      // Ensure transaction succeeded and emitted event
       await expect(tx).not.to.be.reverted;
       await expect(tx)
         .to.emit(giftBox, "CreateFund")
-        .withArgs(fundTokenAddress, "Fund 1", "Just a test fund", "SUMIT", []);
+        .withArgs(
+          fundTokenAddress,
+          fundManager.address,
+          fundName,
+          fundDescription,
+          fundSymbolSuffix,
+          ["ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"]
+        );
+
+      // Ensure contract is returning correct data
+      expect(await giftBox.numFunds()).to.equal(1);
+      const fund = await giftBox.funds(fundTokenAddress);
+      expect(fund.manager).to.equal(fundManager.address);
+      expect(fund.name).to.equal(fundName);
+      expect(fund.description).to.equal(fundDescription);
+
+      expect(await giftBox.numFundReferences(fundTokenAddress)).to.equal(1);
+      expect(await giftBox.fundReferences(fundTokenAddress, 0)).to.equal(
+        fundReference
+      );
     });
   });
 
@@ -75,10 +100,11 @@ describe("GiftBox", function () {
         .connect(donor1)
         .depositStableCoins(fundTokenAddress, 100);
 
+      // Ensure transaction succeeded and emitted event
       await expect(tx).not.to.be.reverted;
       await expect(tx)
         .to.emit(giftBox, "DepositStableCoins")
-        .withArgs(fundTokenAddress, 100);
+        .withArgs(fundTokenAddress, donor1.address, 100);
 
       const GiftBoxFundToken = await ethers.getContractFactory(
         "GiftBoxFundToken"
