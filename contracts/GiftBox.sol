@@ -179,4 +179,40 @@ contract GiftBox {
             id: requestId
         });
     }
+
+    function voteOnWithdrawRequest(
+        address fundTokenAddress,
+        uint256 id,
+        bool vote
+    ) public {
+        // If this is the first time user is voting on this
+        if (withdrawRequestVotes[fundTokenAddress][id][msg.sender] == Vote.NA) {
+            if (vote) {
+                withdrawRequests[fundTokenAddress][id].numVotesFor += 1;
+            } else {
+                withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
+            }
+            // User voted for before and now voting against
+        } else if (
+            withdrawRequestVotes[fundTokenAddress][id][msg.sender] ==
+            Vote.For &&
+            !vote
+        ) {
+            withdrawRequests[fundTokenAddress][id].numVotesFor -= 1;
+            withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
+            // User voted against before and now voting for
+        } else if (
+            withdrawRequestVotes[fundTokenAddress][id][msg.sender] ==
+            Vote.Against &&
+            vote
+        ) {
+            withdrawRequests[fundTokenAddress][id].numVotesFor += 1;
+            withdrawRequests[fundTokenAddress][id].numVotesAgainst -= 1;
+        }
+
+        // Set the new vote
+        withdrawRequestVotes[fundTokenAddress][id][msg.sender] = vote
+            ? Vote.For
+            : Vote.Against;
+    }
 }
