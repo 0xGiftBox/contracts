@@ -9,12 +9,6 @@ contract GiftBox {
     // Address of the stablecoin GiftBox accepts as funding
     address public stableCoinAddress;
 
-    enum Vote {
-        NA,
-        For,
-        Against
-    }
-
     struct Fund {
         address manager;
         string name;
@@ -39,7 +33,7 @@ contract GiftBox {
     address[] fundTokenAddresses;
     mapping(address => Fund) public funds;
     mapping(address => string[]) public fundReferences;
-    mapping(address => mapping(address => Vote)) public fundClosureVotes;
+    mapping(address => mapping(address => bool)) public fundClosureHasUserVoted;
 
     function numFunds() public view returns (uint256) {
         return fundTokenAddresses.length;
@@ -57,8 +51,8 @@ contract GiftBox {
     mapping(address => WithdrawRequest[]) public withdrawRequests;
     mapping(address => mapping(uint256 => string[]))
         public withdrawRequestReferences;
-    mapping(address => mapping(uint256 => mapping(address => Vote)))
-        public withdrawRequestVotes;
+    mapping(address => mapping(uint256 => mapping(address => bool)))
+        public withdrawRequestHasUserVoted;
 
     function numWithdrawRequests(address fundTokenAddress)
         public
@@ -185,34 +179,12 @@ contract GiftBox {
         uint256 id,
         bool vote
     ) public {
-        // If this is the first time user is voting on this
-        if (withdrawRequestVotes[fundTokenAddress][id][msg.sender] == Vote.NA) {
-            if (vote) {
-                withdrawRequests[fundTokenAddress][id].numVotesFor += 1;
-            } else {
-                withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
-            }
-            // User voted for before and now voting against
-        } else if (
-            withdrawRequestVotes[fundTokenAddress][id][msg.sender] ==
-            Vote.For &&
-            !vote
-        ) {
-            withdrawRequests[fundTokenAddress][id].numVotesFor -= 1;
-            withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
-            // User voted against before and now voting for
-        } else if (
-            withdrawRequestVotes[fundTokenAddress][id][msg.sender] ==
-            Vote.Against &&
-            vote
-        ) {
+        // TODO: Check if user has voted already
+        if (vote) {
             withdrawRequests[fundTokenAddress][id].numVotesFor += 1;
-            withdrawRequests[fundTokenAddress][id].numVotesAgainst -= 1;
+        } else {
+            withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
         }
-
-        // Set the new vote
-        withdrawRequestVotes[fundTokenAddress][id][msg.sender] = vote
-            ? Vote.For
-            : Vote.Against;
+        withdrawRequestHasUserVoted[fundTokenAddress][id][msg.sender] = true;
     }
 }
