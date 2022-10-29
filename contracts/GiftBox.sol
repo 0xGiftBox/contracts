@@ -18,13 +18,15 @@ contract GiftBox {
     enum WithdrawRequestStatus {
         Open,
         Passed,
-        Failed
+        Failed,
+        Executed
     }
 
     struct WithdrawRequest {
         uint256 amount;
         string title;
         WithdrawRequestStatus status;
+        uint256 deadline;
         uint256 numVotesFor;
         uint256 numVotesAgainst;
     }
@@ -33,7 +35,6 @@ contract GiftBox {
     address[] fundTokenAddresses;
     mapping(address => Fund) public funds;
     mapping(address => string[]) public fundReferences;
-    mapping(address => mapping(address => bool)) public fundClosureHasUserVoted;
 
     function numFunds() public view returns (uint256) {
         return fundTokenAddresses.length;
@@ -149,6 +150,7 @@ contract GiftBox {
         address fundTokenAddress,
         uint256 amount,
         string memory title,
+        uint256 deadline,
         string[] memory references
     ) public {
         uint256 requestId = withdrawRequests[fundTokenAddress].length;
@@ -160,7 +162,8 @@ contract GiftBox {
                 amount: amount,
                 numVotesFor: 0,
                 numVotesAgainst: 0,
-                status: WithdrawRequestStatus.Open
+                status: WithdrawRequestStatus.Open,
+                deadline: deadline
             })
         );
         withdrawRequestReferences[fundTokenAddress][requestId] = references;
@@ -179,12 +182,18 @@ contract GiftBox {
         uint256 id,
         bool vote
     ) public {
-        // TODO: Check if user has voted already
+        // TODO: Check if user has voted already and request is still open
         if (vote) {
             withdrawRequests[fundTokenAddress][id].numVotesFor += 1;
         } else {
             withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
         }
         withdrawRequestHasUserVoted[fundTokenAddress][id][msg.sender] = true;
+    }
+
+    function executeWithdrawRequest(address fundTokenAddress, uint256 id)
+        public
+    {
+        // TODO: Check caller is fund manager, request is still open, deadline has passed, votes are in the green
     }
 }
