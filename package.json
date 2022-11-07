@@ -1,7 +1,6 @@
 {
   "name": "giftbox",
   "version": "1.0.0",
-  "main": "index.js",
   "repository": "git@github.com:skulltech/contracts.git",
   "author": "Sumit Ghosh <sumit@sumit-ghosh.com>",
   "license": "MIT",

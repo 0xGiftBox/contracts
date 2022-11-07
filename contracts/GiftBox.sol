@@ -17,9 +17,8 @@ contract GiftBox {
 
     enum WithdrawRequestStatus {
         Open,
-        Passed,
-        Failed,
-        Executed
+        Executed,
+        Failed
     }
 
     struct WithdrawRequest {
@@ -32,7 +31,7 @@ contract GiftBox {
     }
 
     // Funds
-    address[] fundTokenAddresses;
+    address[] public fundTokenAddresses;
     mapping(address => Fund) public funds;
     mapping(address => string[]) public fundReferences;
 
@@ -89,7 +88,7 @@ contract GiftBox {
         string memory name,
         string memory symbolSuffix,
         string[] memory references
-    ) public {
+    ) public returns (address) {
         // Deploy new ERC20 token for this fund
         GiftBoxFundToken fundToken = new GiftBoxFundToken(name, symbolSuffix);
         address fundTokenAddress = address(fundToken);
@@ -111,6 +110,9 @@ contract GiftBox {
             symbolSuffix: symbolSuffix,
             references: references
         });
+
+        // Return fund token address because the client doesn't know it
+        return fundTokenAddress;
     }
 
     event DepositStableCoins(
@@ -122,6 +124,12 @@ contract GiftBox {
     function depositStableCoins(address fundTokenAddress, uint256 amount)
         public
     {
+        // Fund manager cannot deposit money into the fund
+        require(
+            msg.sender != funds[fundTokenAddress].manager,
+            "Fund manager cannot deposit coins into the fund"
+        );
+
         // Transfer stablecoins
         IERC20 stableCoin = IERC20(stableCoinAddress);
         stableCoin.transferFrom(msg.sender, address(this), amount);
@@ -143,6 +151,7 @@ contract GiftBox {
         uint256 id,
         uint256 amount,
         string title,
+        uint256 deadline,
         string[] references
     );
 
@@ -153,6 +162,14 @@ contract GiftBox {
         uint256 deadline,
         string[] memory references
     ) public {
+        // Only the fund manager can create withdraw requests
+        require(
+            msg.sender == funds[fundTokenAddress].manager,
+            "Only the fund manager can create withdraw requests"
+        );
+        // Deadline must be ahead in the future
+        require(deadline > block.timestamp, "Deadline must be in the future");
+
         uint256 requestId = withdrawRequests[fundTokenAddress].length;
 
         // Create a new WithdrawRequest object
@@ -172,6 +189,7 @@ contract GiftBox {
             amount: amount,
             fundTokenAddress: fundTokenAddress,
             title: title,
+            deadline: deadline,
             references: references,
             id: requestId
         });
@@ -182,18 +200,68 @@ contract GiftBox {
         uint256 id,
         bool vote
     ) public {
-        // TODO: Check if user has voted already and request is still open
+        // Fund manager cannot vote
+        require(
+            msg.sender != funds[fundTokenAddress].manager,
+            "Fund manager cannot vote on withdraw requests"
+        );
+        // A user cannot vote twice on an withdraw request
+        require(
+            !withdrawRequestHasUserVoted[fundTokenAddress][id][msg.sender],
+            "You have already voted on this withdraw request"
+        );
+        // Check if voting is open
+        require(
+            withdrawRequests[fundTokenAddress][id].status ==
+                WithdrawRequestStatus.Open,
+            "The withdraw request is not open"
+        );
+        // Make sure deadline hasn't passed
+        require(
+            withdrawRequests[fundTokenAddress][id].deadline > block.timestamp,
+            "The deadline for voting on this withdraw request has passed"
+        );
+
         if (vote) {
             withdrawRequests[fundTokenAddress][id].numVotesFor += 1;
         } else {
             withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
         }
         withdrawRequestHasUserVoted[fundTokenAddress][id][msg.sender] = true;
+
+        // Handle additional vote logic
     }
 
     function executeWithdrawRequest(address fundTokenAddress, uint256 id)
         public
     {
-        // TODO: Check caller is fund manager, request is still open, deadline has passed, votes are in the green
+        // Only the fund manager can execute withdraw requests
+        require(
+            msg.sender == funds[fundTokenAddress].manager,
+            "Only the fund manager can execute withdraw requests"
+        );
+        // Deadline must have passed
+        require(
+            withdrawRequests[fundTokenAddress][id].deadline < block.timestamp,
+            "The withdraw request is still open for voting"
+        );
+        // Request should be open and not already executed
+        require(
+            withdrawRequests[fundTokenAddress][id].status ==
+                WithdrawRequestStatus.Open,
+            "The withdraw request is already either executed or failed"
+        );
+
+        // Check if votes are against the request, and mark the request as failed and return if so
+        if (
+            withdrawRequests[fundTokenAddress][id].numVotesFor <=
+            withdrawRequests[fundTokenAddress][id].numVotesAgainst
+        ) {
+            withdrawRequests[fundTokenAddress][id]
+                .status = WithdrawRequestStatus.Failed;
+            return;
+        }
+
+        // Handle execute logic
     }
 }
