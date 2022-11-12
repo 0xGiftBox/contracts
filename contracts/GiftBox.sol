@@ -13,6 +13,8 @@ contract GiftBox {
         address manager;
         string name;
         bool isOpen;
+        uint256 amountDeposited;
+        uint256 balance;
     }
 
     enum WithdrawRequestStatus {
@@ -98,7 +100,9 @@ contract GiftBox {
         funds[fundTokenAddress] = Fund({
             manager: msg.sender,
             name: name,
-            isOpen: true
+            isOpen: true,
+            amountDeposited: 0,
+            balance: 0
         });
         fundReferences[fundTokenAddress] = references;
 
@@ -111,7 +115,7 @@ contract GiftBox {
             references: references
         });
 
-        // Return fund token address because the client doesn't know it
+        // Return fund token address for the client
         return fundTokenAddress;
     }
 
@@ -138,6 +142,10 @@ contract GiftBox {
         GiftBoxFundToken fundToken = GiftBoxFundToken(fundTokenAddress);
         fundToken.mint(msg.sender, amount);
 
+        // Increment counters
+        funds[fundTokenAddress].amountDeposited += amount;
+        funds[fundTokenAddress].balance += amount;
+
         // Emit event
         emit DepositStableCoins({
             fundTokenAddress: fundTokenAddress,
@@ -161,7 +169,7 @@ contract GiftBox {
         string memory title,
         uint256 deadline,
         string[] memory references
-    ) public {
+    ) public returns (uint256) {
         // Only the fund manager can create withdraw requests
         require(
             msg.sender == funds[fundTokenAddress].manager,
@@ -193,6 +201,9 @@ contract GiftBox {
             references: references,
             id: requestId
         });
+
+        // Return withdraw request ID for the client
+        return requestId;
     }
 
     function voteOnWithdrawRequest(
@@ -222,14 +233,17 @@ contract GiftBox {
             "The deadline for voting on this withdraw request has passed"
         );
 
+        // Count vote according to fund tokens held by user
+        IERC20 fundToken = IERC20(fundTokenAddress);
+        uint256 fundTokenBalance = fundToken.balanceOf(msg.sender);
         if (vote) {
-            withdrawRequests[fundTokenAddress][id].numVotesFor += 1;
+            withdrawRequests[fundTokenAddress][id]
+                .numVotesFor += fundTokenBalance;
         } else {
-            withdrawRequests[fundTokenAddress][id].numVotesAgainst += 1;
+            withdrawRequests[fundTokenAddress][id]
+                .numVotesAgainst += fundTokenBalance;
         }
         withdrawRequestHasUserVoted[fundTokenAddress][id][msg.sender] = true;
-
-        // Handle additional vote logic
     }
 
     function executeWithdrawRequest(address fundTokenAddress, uint256 id)
@@ -262,6 +276,19 @@ contract GiftBox {
             return;
         }
 
-        // Handle execute logic
+        // Transfer stablecoins
+        IERC20 stableCoin = IERC20(stableCoinAddress);
+        stableCoin.transferFrom(
+            address(this),
+            msg.sender,
+            withdrawRequests[fundTokenAddress][id].amount
+        );
+
+        // Set withdraw request status and counter
+        withdrawRequests[fundTokenAddress][id].status = WithdrawRequestStatus
+            .Executed;
+        funds[fundTokenAddress].balance -= withdrawRequests[fundTokenAddress][
+            id
+        ].amount;
     }
 }
